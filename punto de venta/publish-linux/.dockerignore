@@ -1,0 +1,9 @@
+# Cosas que NO deben copiarse a la imagen de Docker
+.git
+.gitignore
+**/*.pdb
+**/*.log
+**/*.db
+.DS_Store
+appsettings.Development.json
+docker-compose.yml

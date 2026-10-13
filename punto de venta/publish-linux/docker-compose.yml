@@ -1,0 +1,52 @@
+# Stack para Coolify: Aplicación Blazor (.NET 10 self-contained) + SQL Server 2022
+#
+# En Coolify:
+#   Create New Resource -> Public Repository (o Private) -> Build strategy: Compose
+#   Base Directory: /            Docker Compose Location: /docker-compose.yml
+#
+# Variables que Coolify pedirá (Environment Variables):
+#   MSSQL_SA_PASSWORD -> contraseña de 'sa' (obligatoria). Debe tener mayúscula,
+#                        minúscula, número y símbolo. Evita ';' y '$'.
+#                        Recomendado: PuntoVenta!2026
+#
+# El resto (dominio) lo genera Coolify con SERVICE_FQDN_APP_80.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:80
+      # Sobrescribe el "localhost" de appsettings.json -> apunta al contenedor de SQL Server
+      - ConnectionStrings__DefaultConnection=Server=mssql,1433;Database=PuntoDeVenta;User Id=sa;Password=${MSSQL_SA_PASSWORD:?};TrustServerCertificate=True;Encrypt=False
+      # Coolify genera el dominio y enruta al puerto 80 del servicio 'app'
+      - SERVICE_FQDN_APP_80=/
+    depends_on:
+      mssql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD:?}
+      # Express = gratuito y apto para producción (límite 10 GB por base)
+      # Cámbialo a Standard/Enterprise si tienes licencia.
+      - MSSQL_PID=Express
+    # Sin 'ports': queda solo en la red interna de Coolify.
+    # Para conectar con SSMS/Azure Data Studio, añade temporalmente "1433:1433".
+    volumes:
+      - mssql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+    restart: unless-stopped
+
+volumes:
+  mssql-data:
